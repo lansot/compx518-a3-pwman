@@ -3,7 +3,7 @@
 
 Simple stupid password manager, written in Go.
 
-Stored credentials are stored in an encrypted key/value "vault" file, locked behind a master password.
+Stored credentials are stored in an encrypted "vaultfile", locked behind a master password.
 
 This password manager program can be invoked with 4 different commands (`pwman [COMMAND]`).
 
