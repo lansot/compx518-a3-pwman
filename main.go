@@ -1,60 +1,98 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/gob"
 	"fmt"
 	"os"
+	"pwman/util"
+
+	"golang.org/x/crypto/bcrypt"
 )
+
+// Vault fields are base64 encoded strings
+type Vault struct {
+	saltedHash string
+	pbkdfSalt  string
+	kvStore    string
+}
 
 func main() {
 	args := os.Args
 
+	// Program must only be invoked with 1 subcommand
 	if len(args) == 2 {
 		switch args[1] {
 		case "init":
-			if vaultExists() {
+			if util.VaultExists() {
 				fmt.Println("A vaultfile already exists in the current directory. If you wish to overwrite it, first delete it manually.")
 			} else {
-				fmt.Println("generate vault stuff blahblah")
+				initializeVault()
 			}
 		case "add":
-			if vaultExists() {
+			if util.VaultExists() {
 				fmt.Println("blahblahblah do adding stuff")
 			} else {
-				printNoVaultFound()
+				util.PrintNoVaultFound()
 			}
 		case "remove":
-			if vaultExists() {
+			if util.VaultExists() {
 				fmt.Println("blahblahblah do removal stuff")
 			} else {
-				printNoVaultFound()
+				util.PrintNoVaultFound()
 			}
 		case "fetch":
-			if vaultExists() {
+			if util.VaultExists() {
 				fmt.Println("blahblahblah do fetching stuff")
 			} else {
-				printNoVaultFound()
+				util.PrintNoVaultFound()
 			}
 		default:
-			printHelp()
+			util.PrintHelp()
 		}
 	} else {
-		printHelp()
+		util.PrintHelp()
 	}
 }
 
-func printHelp() {
-	fmt.Println("Invalid arguments.")
-	fmt.Println("Valid arguments are: init, add, remove, fetch")
-}
+// Create a new Vaultfile.
+// Prompt for a new master password, then bcrypt hash it.
+// Gob serialize an empty key/value store, then AES-256 encrypt with the
+// master password.
+func initializeVault() {
+	vault := Vault{}
+	var inMasterPassword string
 
-func printNoVaultFound() {
-	fmt.Println("No vaultfile found in the current directory. Generate one with \"pwman init\".")
-}
+	fmt.Println("Creating a new Vaultfile...")
+	fmt.Println("Please enter a master password to use for the new vault.")
 
-func vaultExists() bool {
-	if _, err := os.Stat("./vaultfile"); os.IsNotExist(err) {
-		return false
-	} else {
-		return true
+	inTokens, err := fmt.Scanf("%s", &inMasterPassword)
+
+	// Master password must not contain any spaces
+	for inTokens != 1 || err != nil {
+		fmt.Println("Invalid input. Master passwords must be a single continuous string of alphanumeric characters.")
+		fmt.Println("Please enter a master password to use for the new vault.")
+		inTokens, err = fmt.Scanf("%s", &inMasterPassword)
 	}
+
+	// bcrypt hash the input master password
+	saltedHash, _ := bcrypt.GenerateFromPassword([]byte(inMasterPassword), bcrypt.DefaultCost)
+	vault.saltedHash = base64.StdEncoding.EncodeToString(saltedHash)
+
+	// get a serialized empty KV store (map).
+	// gob encode and encrypt.
+	bytesBuf := new(bytes.Buffer)
+	encoder := gob.NewEncoder(bytesBuf)
+	encoder.Encode(map[string]string{})
+
+	randomSalt, _ := util.GenerateCryptoString(8)
+	vault.pbkdfSalt = randomSalt
+	key := util.PBKDF2StretchKey([]byte(inMasterPassword), []byte(vault.pbkdfSalt))
+
+	encryptedGob, _ := util.EncryptAES(key, bytesBuf.Bytes())
+
+	// store encrypted gob as base64 string
+	vault.kvStore = base64.StdEncoding.EncodeToString(encryptedGob)
+
 }
