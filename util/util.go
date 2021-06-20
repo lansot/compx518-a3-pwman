@@ -16,11 +16,10 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-// Vault fields are base64 encoded strings
 type Vault struct {
 	SaltedHash string
 	PBKDFsalt  string
-	KVstore    string
+	KVstore    string // base64 encoded
 }
 
 // Generates a random ASCII string of specified length using a cryptographic PRNG.

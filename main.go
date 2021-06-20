@@ -71,7 +71,7 @@ func initializeVault() {
 
 	// bcrypt hash the input master password
 	saltedHash, _ := bcrypt.GenerateFromPassword([]byte(inMasterPassword), bcrypt.DefaultCost)
-	vault.SaltedHash = base64.StdEncoding.EncodeToString(saltedHash)
+	vault.SaltedHash = string(saltedHash[:])
 
 	// get a serialized empty KV store (map).
 	// gob encode and encrypt.
