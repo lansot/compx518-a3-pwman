@@ -11,13 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Vault fields are base64 encoded strings
-type Vault struct {
-	saltedHash string
-	pbkdfSalt  string
-	kvStore    string
-}
-
 func main() {
 	args := os.Args
 
@@ -61,7 +54,7 @@ func main() {
 // Gob serialize an empty key/value store, then AES-256 encrypt with the
 // master password.
 func initializeVault() {
-	vault := Vault{}
+	vault := util.Vault{}
 	var inMasterPassword string
 
 	fmt.Println("Creating a new Vaultfile...")
@@ -78,7 +71,7 @@ func initializeVault() {
 
 	// bcrypt hash the input master password
 	saltedHash, _ := bcrypt.GenerateFromPassword([]byte(inMasterPassword), bcrypt.DefaultCost)
-	vault.saltedHash = base64.StdEncoding.EncodeToString(saltedHash)
+	vault.SaltedHash = base64.StdEncoding.EncodeToString(saltedHash)
 
 	// get a serialized empty KV store (map).
 	// gob encode and encrypt.
@@ -87,12 +80,16 @@ func initializeVault() {
 	encoder.Encode(map[string]string{})
 
 	randomSalt, _ := util.GenerateCryptoString(8)
-	vault.pbkdfSalt = randomSalt
-	key := util.PBKDF2StretchKey([]byte(inMasterPassword), []byte(vault.pbkdfSalt))
+	vault.PBKDFsalt = randomSalt
+	key := util.PBKDF2StretchKey([]byte(inMasterPassword), []byte(vault.PBKDFsalt))
 
 	encryptedGob, _ := util.EncryptAES(key, bytesBuf.Bytes())
 
 	// store encrypted gob as base64 string
-	vault.kvStore = base64.StdEncoding.EncodeToString(encryptedGob)
+	vault.KVstore = base64.StdEncoding.EncodeToString(encryptedGob)
 
+	// aaand now we write the vault information to the vaultfile
+	util.SaveVault(vault)
+
+	fmt.Println("New Vaultfile created.")
 }

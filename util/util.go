@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
@@ -14,6 +15,13 @@ import (
 
 	"golang.org/x/crypto/pbkdf2"
 )
+
+// Vault fields are base64 encoded strings
+type Vault struct {
+	SaltedHash string
+	PBKDFsalt  string
+	KVstore    string
+}
 
 // Generates a random ASCII string of specified length using a cryptographic PRNG.
 func GenerateCryptoString(strLength int) (string, error) {
@@ -38,14 +46,12 @@ func GenerateCryptoString(strLength int) (string, error) {
 // and return the encrypted bytes.
 func EncryptAES(key, plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
-
 	if err != nil {
 		panic(err)
 	}
 
 	// pad the input for AES
 	input, err := PKCS7pad(plaintext, aes.BlockSize)
-
 	if err != nil {
 		panic(err)
 	}
@@ -71,7 +77,6 @@ func EncryptAES(key, plaintext []byte) ([]byte, error) {
 // and return the decrypted bytes.
 func DecryptAES(key, ciphertext []byte) []byte {
 	block, err := aes.NewCipher(key)
-
 	if err != nil {
 		panic(err)
 	}
@@ -87,7 +92,6 @@ func DecryptAES(key, ciphertext []byte) []byte {
 	cbc.CryptBlocks(processingBuf, body)
 
 	outBytes, err := PKCS7strip(processingBuf, aes.BlockSize)
-
 	if err != nil {
 		panic(err)
 	}
@@ -131,6 +135,24 @@ func PKCS7strip(data []byte, blockSize int) ([]byte, error) {
 // Stretch a password into a key using PBKDF2
 func PBKDF2StretchKey(inputPW []byte, salt []byte) []byte {
 	return pbkdf2.Key(inputPW, salt, 4096, 32, sha1.New)
+}
+
+// Write the contents of a Vault struct to a new Vaultfile
+func SaveVault(vault Vault) {
+	file, err := os.Create("./Vaultfile")
+	if err != nil {
+		panic(err)
+	}
+
+	writer := bufio.NewWriter(file)
+	linesToWrite := []string{vault.SaltedHash, vault.PBKDFsalt, vault.KVstore}
+	for _, line := range linesToWrite {
+		_, err := writer.WriteString(line + "\n")
+		if err != nil {
+			panic(err)
+		}
+	}
+	writer.Flush()
 }
 
 // Print some help text on invalid program invokation.

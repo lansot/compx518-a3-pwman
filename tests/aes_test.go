@@ -1,17 +1,14 @@
 package tests
 
 import (
-	"crypto/sha1"
 	"pwman/util"
 	"testing"
-
-	"golang.org/x/crypto/pbkdf2"
 )
 
 func TestAES(t *testing.T) {
 	inputPass := []byte("testpassword")
 	randomSalt, _ := util.GenerateCryptoString(8)
-	key := pbkdf2.Key(inputPass, []byte(randomSalt), 4096, 32, sha1.New)
+	key := util.PBKDF2StretchKey(inputPass, []byte(randomSalt))
 	inputText := "this is a plain text example blahblahblah"
 
 	cryptText, err := util.EncryptAES(key, []byte(inputText))
