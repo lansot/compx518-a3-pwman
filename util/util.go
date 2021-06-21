@@ -154,6 +154,37 @@ func SaveVault(vault Vault) {
 	writer.Flush()
 }
 
+// Read in the contents of a Vaultfile and return a Vault struct
+func ReadVault() Vault {
+	vault := Vault{}
+
+	file, err := os.Open("./Vaultfile")
+	if err != nil {
+		panic(err)
+	}
+
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if len(lines) != 3 {
+		panic("Vaultfile had unexpected number of lines. Possible file corruption?")
+	}
+	vault.SaltedHash = lines[0]
+	vault.PBKDFsalt = lines[1]
+	vault.KVstore = lines[2]
+
+	err = scanner.Err()
+	if err != nil {
+		panic(err)
+	}
+
+	return vault
+}
+
 // Print some help text on invalid program invokation.
 func PrintHelp() {
 	fmt.Println("Invalid arguments.")

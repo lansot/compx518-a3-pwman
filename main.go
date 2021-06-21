@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// lord, forgive me for what i am about to do.
 func main() {
 	args := os.Args
 
@@ -25,7 +26,43 @@ func main() {
 			}
 		case "add":
 			if util.VaultExists() {
-				fmt.Println("blahblahblah do adding stuff")
+				vault, kv, key := openVault()
+				if len(kv) != 0 {
+					fmt.Println("Vault contents:")
+					for k := range kv {
+						fmt.Println(k)
+					}
+				}
+				var inputIdentifier string
+				var pwLength int
+				fmt.Println("Enter an identifier for the new password entry. (Entering an existing identifier updates its corresponding entry.)")
+				inTokens, err := fmt.Scanf("%s", &inputIdentifier)
+				for inTokens != 1 || err != nil {
+					fmt.Println("Invalid input. Password identifiers must be a single continuous string of alphanumeric characters.")
+					fmt.Println("Enter an identifier for the new password entry.")
+					inTokens, err = fmt.Scanf("%s", &inputIdentifier)
+				}
+
+				fmt.Println("Enter a length for the new password. (8~80)")
+				inTokens, err = fmt.Scanf("%d", &pwLength)
+				for inTokens != 1 || err != nil || pwLength < 8 || pwLength > 80 {
+					fmt.Println("Invalid input.")
+					fmt.Println("Enter a length for the new password. (8~80)")
+					inTokens, err = fmt.Scanf("%s", &pwLength)
+				}
+
+				// now generate the mf password!!
+				generatedPW, _ := util.GenerateCryptoString(pwLength)
+				kv[inputIdentifier] = generatedPW
+
+				// now encode, encrypt, base64-encode the kvstore and write the mf vault!!
+				bytesBuf := new(bytes.Buffer)
+				encoder := gob.NewEncoder(bytesBuf)
+				encoder.Encode(kv)
+
+				encryptedGob, _ := util.EncryptAES(key, bytesBuf.Bytes())
+				vault.KVstore = base64.StdEncoding.EncodeToString(encryptedGob)
+				util.SaveVault(vault)
 			} else {
 				util.PrintNoVaultFound()
 			}
@@ -37,7 +74,33 @@ func main() {
 			}
 		case "fetch":
 			if util.VaultExists() {
-				fmt.Println("blahblahblah do fetching stuff")
+				_, kv, _ := openVault()
+				if len(kv) == 0 {
+					fmt.Println("Vault is empty. You can add new entries with the \"add\" command.")
+				} else {
+					fmt.Println("Vault contents:")
+					for k := range kv {
+						fmt.Println(k)
+					}
+					var inputIdentifier string
+					var requestedPW string
+					choiceExists := false
+					for !choiceExists {
+						fmt.Println("Choose an identifier to see the corresponding password.")
+						inTokens, err := fmt.Scanf("%s", &inputIdentifier)
+						for inTokens != 1 || err != nil {
+							fmt.Println("Invalid input. Password identifiers must be a single continuous string of alphanumeric characters.")
+							fmt.Println("Choose an identifier to see the corresponding password.")
+							inTokens, err = fmt.Scanf("%s", &inputIdentifier)
+						}
+						requestedPW, choiceExists = kv[inputIdentifier]
+						if choiceExists {
+							fmt.Printf("Requested password: %v\n", requestedPW)
+						} else {
+							fmt.Printf("No corresponding password found for \"%v\".\n", inputIdentifier)
+						}
+					}
+				}
 			} else {
 				util.PrintNoVaultFound()
 			}
@@ -92,4 +155,56 @@ func initializeVault() {
 	util.SaveVault(vault)
 
 	fmt.Println("New Vaultfile created.")
+}
+
+// Open an existing Vaultfile.
+// Prompt for a new master password, then authenticate.
+// Return the Vault struct, and the unencoded and decrypted KVstore map object.
+// Also return the key for future encryption operations.
+func openVault() (util.Vault, map[string]string, []byte) {
+	vault := util.ReadVault()
+
+	var inMasterPassword string
+	authSuccess := fmt.Errorf("authSuccess becomes nil when auth succeeds")
+
+	fmt.Println("Opening an existing Vaultfile...")
+
+	for authSuccess != nil {
+		fmt.Println("Please enter the vault's master password.")
+
+		inTokens, err := fmt.Scanf("%s", &inMasterPassword)
+
+		// Master password must not contain any spaces
+		for inTokens != 1 || err != nil {
+			fmt.Println("Invalid input. Master passwords must be a single continuous string of alphanumeric characters.")
+			fmt.Println("Please enter the vault's master password.")
+			inTokens, err = fmt.Scanf("%s", &inMasterPassword)
+		}
+
+		// bcrypt compare to authenticate
+		authSuccess = bcrypt.CompareHashAndPassword([]byte(vault.SaltedHash), []byte(inMasterPassword))
+		if authSuccess != nil {
+			fmt.Println("Authentication failed. Check password?")
+		}
+	}
+
+	// decode encrypted gob
+	encryptedKVGob, err := base64.StdEncoding.DecodeString(vault.KVstore)
+	if err != nil {
+		panic(err)
+	}
+
+	// stretch password to make key
+	key := util.PBKDF2StretchKey([]byte(inMasterPassword), []byte(vault.PBKDFsalt))
+
+	// decrypt the decoded gob
+	decryptedKVGob := util.DecryptAES(key, encryptedKVGob)
+
+	// unpack the gob
+	bytesBuf := bytes.NewBuffer(decryptedKVGob)
+	decoder := gob.NewDecoder(bytesBuf)
+	var kvMap map[string]string
+	decoder.Decode(&kvMap)
+
+	return vault, kvMap, key
 }
