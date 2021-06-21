@@ -54,6 +54,7 @@ func main() {
 				// now generate the mf password!!
 				generatedPW, _ := util.GenerateCryptoString(pwLength)
 				kv[inputIdentifier] = generatedPW
+				fmt.Println("Entry added. Writing updated vault to disk...")
 
 				// now encode, encrypt, base64-encode the kvstore and write the mf vault!!
 				bytesBuf := new(bytes.Buffer)
@@ -68,7 +69,37 @@ func main() {
 			}
 		case "remove":
 			if util.VaultExists() {
-				fmt.Println("blahblahblah do removal stuff")
+				vault, kv, key := openVault()
+				if len(kv) == 0 {
+					fmt.Println("Vault is empty. You can add new entries with the \"add\" command.")
+				} else {
+					fmt.Println("Vault contents:")
+					for k := range kv {
+						fmt.Println(k)
+					}
+					var inputIdentifier string
+					fmt.Println("Enter an identifier for the password entry to remove.")
+					fmt.Scanf("%s", &inputIdentifier)
+					_, exists := kv[inputIdentifier]
+					for !exists {
+						fmt.Println("No entry corresponding to that identifier was found.")
+						fmt.Println("Enter an identifier for the password entry to remove.")
+						fmt.Scanf("%s", &inputIdentifier)
+						_, exists = kv[inputIdentifier]
+					}
+
+					delete(kv, inputIdentifier)
+					fmt.Println("Entry deleted. Writing updated vault to disk...")
+
+					// now encode, encrypt, base64-encode the kvstore and write the mf vault!!
+					bytesBuf := new(bytes.Buffer)
+					encoder := gob.NewEncoder(bytesBuf)
+					encoder.Encode(kv)
+
+					encryptedGob, _ := util.EncryptAES(key, bytesBuf.Bytes())
+					vault.KVstore = base64.StdEncoding.EncodeToString(encryptedGob)
+					util.SaveVault(vault)
+				}
 			} else {
 				util.PrintNoVaultFound()
 			}
