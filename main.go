@@ -48,7 +48,7 @@ func main() {
 				for inTokens != 1 || err != nil || pwLength < 8 || pwLength > 80 {
 					fmt.Println("Invalid input.")
 					fmt.Println("Enter a length for the new password. (8~80)")
-					inTokens, err = fmt.Scanf("%s", &pwLength)
+					inTokens, err = fmt.Scanf("%d", &pwLength)
 				}
 
 				// now generate the mf password!!
